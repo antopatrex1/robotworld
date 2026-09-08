@@ -57,6 +57,9 @@ class SideGraspPlan:
         self.clearance_duration=3. if low_object else 8.
         self.close_time=self.clearance_duration+3.
         self.lift_time=self.clearance_duration+5.
+        # Leave clearance margin for cup settling within the fingers, including
+        # approaches from other table edges. IK still validates the whole lift.
+        self.lift_height=.20 if object_name=='mug' else .18
         self.origin=data.body(object_name).xpos.copy()
         if self.origin[2]<.70:
             raise ValueError('The object is off the table. Reset the scene before retrying the grasp.')
@@ -84,7 +87,7 @@ class SideGraspPlan:
         # experiment, to avoid selecting a different redundant-arm solution.
         prepose,e4=solve_ik(model,self.home,pre,rotation)
         grasp,e5=solve_ik(model,prepose,target,rotation)
-        lift,e6=solve_ik(model,grasp,target+[0,0,.18],rotation)
+        lift,e6=solve_ik(model,grasp,target+[0,0,self.lift_height],rotation)
         if low_object:
             high2,e2=high1,e
             high3,e3=lift,e6
@@ -96,7 +99,7 @@ class SideGraspPlan:
         self.clearance=[high1,high2,high3,prepose]
         self.prepose,self.grasp,self.lift=prepose,grasp,lift
         self.lift_poses=[grasp]
-        for height in np.linspace(0,.18,61)[1:]:
+        for height in np.linspace(0,self.lift_height,61)[1:]:
             pose,error=solve_ik(model,self.lift_poses[-1],target+[0,0,height],rotation,iterations=100)
             if error>.015: raise ValueError('The arm cannot follow a clear lift from this position.')
             self.lift_poses.append(pose)
