@@ -1,0 +1,11 @@
+{
+  "display_name": "G1 Home Lab \u2014 Living Room",
+  "model": "marble-1.0-draft",
+  "permission": {
+    "public": false
+  },
+  "world_prompt": {
+    "type": "text",
+    "text_prompt": "A spacious contemporary living room with a broad completely clear flat level wooden floor in the center, furniture placed only against the distant perimeter walls, sofa at the back, soft daylight, realistic residential interior. Eye level 1.3 meters, unobstructed central floor for a small humanoid robot to walk and work at a movable low table. No people, no robots, no central furniture or clutter."
+  }
+}

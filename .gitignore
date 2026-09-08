@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+vendor/
+data/
+build/
+.venv/
+.pytest_cache/

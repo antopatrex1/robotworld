@@ -1,0 +1,18 @@
+{
+  "mujoco_menagerie": {
+    "commit": "8161bba264d7fa7c99ca301e91e7fb44737676ad",
+    "url": "https://github.com/google-deepmind/mujoco_menagerie.git"
+  },
+  "soma-retargeter": {
+    "commit": "b3ef2708d84bfd1314ddb52d0db6c9c211df1f57",
+    "url": "https://github.com/NVIDIA/soma-retargeter.git"
+  },
+  "spider": {
+    "commit": "71238456bf97a7eeb3d0471aa31974e2d404d4ae",
+    "url": "https://github.com/facebookresearch/spider.git"
+  },
+  "humanoid_teleoperate": {
+    "commit": "bc1208353a659f0e91a87e39a7950da8ffc2d660",
+    "url": "https://github.com/OpenMind/humanoid_teleoperate.git"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "display_name": "G1 Home Lab \u2014 Kitchen",
+  "model": "marble-1.0-draft",
+  "permission": {
+    "public": false
+  },
+  "world_prompt": {
+    "type": "text",
+    "text_prompt": "A spacious modern residential kitchen, flat level light stone floor with a completely open broad central area for a humanoid robot, oak cabinets and countertops only along distant perimeter walls, sunlit windows, uncluttered surfaces, refrigerator against the far wall. Realistic architectural interior at eye height 1.3 meters. No center island, no people, no robots."
+  }
+}

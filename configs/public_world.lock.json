@@ -1,0 +1,19 @@
+{
+  "world": {
+    "id": "7f964e6d-dbdd-4cf7-a8fb-9292001f69ba",
+    "display_name": "Warm and inviting living room",
+    "generation_output": {
+      "semantics_metadata": {
+        "metric_scale_factor": 2.02352237701416,
+        "ground_plane_offset": 1.2551071643829346
+      },
+      "spz_urls": {
+        "150k": "https://cdn.marble.worldlabs.ai/7f964e6d-dbdd-4cf7-a8fb-9292001f69ba/d297d788-7342-4627-b870-def7dc2c6803_ceramic_150k.spz"
+      }
+    }
+  },
+  "asset": {
+    "size": 2299796,
+    "sha256": "170c7213ef0e4cd6d9e0a197c7dfb52e1223023c655ad3960a1b08f10f79c349"
+  }
+}
