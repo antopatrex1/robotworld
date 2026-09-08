@@ -21,10 +21,11 @@ from .navigation import Planner, Walker
 from .splats import load_world_splats
 from .labels import text_card
 from .object_tasks import ObjectTaskRunner
+from .realsense import RealSensePanel, DEFAULT_SOCKET
 
 
 class Workbench:
-    def __init__(self, port=8765, environment='warm_living_room'):
+    def __init__(self, port=8765, environment='warm_living_room', realsense_socket=DEFAULT_SOCKET):
         self.server=viser.ViserServer(host='127.0.0.1',port=port,label='Robot World')
         self.server.scene.set_up_direction('+z')
         self.server.gui.configure_theme(control_layout='floating',control_width='medium',dark_mode=True,
@@ -53,6 +54,7 @@ class Workbench:
         prompt_form.on_submit(submit_prompt)
         gui.add_button('Grasp blue bottle',color='teal').on_click(lambda _:self.commands.put(('prompt','pick up the blue bottle')))
         self.reply=gui.add_markdown(self.last_reply)
+        self.realsense=RealSensePanel(self.server, realsense_socket)
         with gui.add_folder('Try a command',expand_by_default=False):
             gui.add_markdown('`walk backward 1 meter`\n\n`walk to x 1.5 y 0.8`\n\n`go to the red mug`\n\n`reach for the blue bottle`\n\n`pick up the blue bottle`\n\n`grab the green apple`\n\n`open hands` · `turn left` · `stop`\n\nLocal commands understand these actions and object names.')
             for title,command in [('Walk around table','walk around the table'),('Reach for bottle','reach for the blue bottle'),('Open hands','open hands')]:
@@ -333,9 +335,14 @@ def main():
     parser.add_argument('--port',type=int,default=8765)
     parser.add_argument('--environment',default='warm_living_room')
     parser.add_argument('--open-browser',action='store_true')
+    parser.add_argument('--realsense-socket',default=DEFAULT_SOCKET,help='Socket of the existing RealSense camera helper')
     args=parser.parse_args()
-    app=Workbench(args.port,args.environment)
+    app=Workbench(args.port,args.environment,args.realsense_socket)
     if args.open_browser: webbrowser.open(f'http://127.0.0.1:{args.port}')
-    app.run()
+    try:
+        app.run()
+    finally:
+        app.realsense.close()
+        app.server.stop()
 
 if __name__=='__main__': main()

@@ -13,7 +13,9 @@ The viewer runs at **http://127.0.0.1:8765**. It stays local to this Mac and nee
 
 ## RealSense RGB-D camera
 
-The [realsense](realsense/README.md) folder contains the native RGB-D camera window and MCP capture server imported from `oai6`. Open **realsense/Start RealSense.command**, or run `./realsense/scripts/start.sh`. Use `--demo` for a synthetic preview. The camera component runs separately from the simulation and includes `camera_status` and `capture_rgbd` tools; see its README for setup and MCP configuration.
+The [realsense](realsense/README.md) folder contains the native RGB-D camera window and MCP capture server imported from `oai6`. Open **realsense/Start RealSense.command**, or run `./realsense/scripts/start.sh`. Use `--demo` for a synthetic preview. Robot World's **RealSense · live camera** panel shares that helper and displays color, depth, and center distance alongside the simulation. Preview updates run independently at up to 10 Hz, reconnect automatically, and hide stale images when the camera disconnects. Uncheck **Show live camera** to pause the preview. Synthetic frames are labeled DEMO.
+
+The physical camera view is not registered to the simulated room, and depth is not aligned to color. The native viewer and MCP tools (`camera_status`, `capture_rgbd`) remain available. For a helper with a custom socket, launch Robot World with `--realsense-socket /path/to/camera.sock`.
 
 ## Prompt controls
 

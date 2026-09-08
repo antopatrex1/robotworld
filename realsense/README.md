@@ -1,6 +1,6 @@
 # RealSense Studio
 
-Robot World's native Rust / GPUI RGB-D camera window and stdio MCP server, imported from `~/Projects/codex/oai6`. This is a standalone camera component; connecting its observations to the simulation is a later step.
+Robot World's native Rust / GPUI RGB-D camera window and stdio MCP server, imported from `~/Projects/codex/oai6`. Robot World's browser interface also displays live color and depth from this component in its **RealSense · live camera** panel. The native window, browser preview, and MCP server share one camera helper. Registering the camera to the simulated room and using its observations for robot actions remain later steps.
 
 ## Launch
 
