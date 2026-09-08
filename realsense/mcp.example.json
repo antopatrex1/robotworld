@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "realsense": {
+      "command": "/Users/martin/Projects/codex/robotworld/realsense/target/debug/realsense-studio",
+      "args": ["mcp"]
+    }
+  }
+}

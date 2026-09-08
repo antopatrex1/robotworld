@@ -1,0 +1,31 @@
+# Rust build output (keep Cargo.lock for this application)
+/target/
+
+# Camera sockets, logs, and captured images
+/.runtime/
+/captures/
+
+# Generated macOS app bundles
+/dist/
+
+# Python test caches and virtual environments
+__pycache__/
+*.py[cod]
+/.venv/
+
+# macOS metadata
+.DS_Store
+._*
+
+# Local secrets (allow checked-in example configuration)
+.env
+.env.*
+!.env.example
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# Machine-specific MCP command paths
+/.codex/config.toml

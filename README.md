@@ -11,6 +11,10 @@ Open **Start Robot World.command**, or run:
 
 The viewer runs at **http://127.0.0.1:8765**. It stays local to this Mac and needs the Python process to remain running. No World Labs API key is sent to the browser. Local playback and commands do not spend API credits.
 
+## RealSense RGB-D camera
+
+The [realsense](realsense/README.md) folder contains the native RGB-D camera window and MCP capture server imported from `oai6`. Open **realsense/Start RealSense.command**, or run `./realsense/scripts/start.sh`. Use `--demo` for a synthetic preview. The camera component runs separately from the simulation and includes `camera_status` and `capture_rgbd` tools; see its README for setup and MCP configuration.
+
 ## Prompt controls
 
 Type in **Ask the robot**, then press **Enter** or click **Run command**. Replies below the box report progress or explain why a request cannot run. Supported local language commands include:
