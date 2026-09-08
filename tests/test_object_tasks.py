@@ -23,17 +23,19 @@ class ObjectTaskTests(unittest.TestCase):
         self.assertLess(np.linalg.norm(data.body('mug').xpos-settled),.001)
         self.assertFalse(data.warning.number.any())
 
-    def run_named_grasp(self,name,phrase):
-        model,data,config,_=build_scene('warm_living_room')
+    def run_named_grasp(self,name,phrase,environment='warm_living_room'):
+        model,data,config,_=build_scene(environment)
         control=Controller(model,data)
         gait=SomaMotion(ROOT/'vendor/soma-retargeter/assets/motions/csv/Neutral_walk_forward_002__A057.csv',model,data.qpos)
         walker=Walker(control,gait);walker.speed=.3
         messages=[]
-        task=ObjectTaskRunner(control,walker,Planner(config),walker.begin,messages.append)
+        labels=config.get('object_labels',{})
+        label=labels.get(name,OBJECTS[name]['label'])
+        task=ObjectTaskRunner(control,walker,Planner(config),walker.begin,messages.append,labels)
         for _ in range(1000):control.step()
         object_start=data.body(name).xpos.copy()
         robot_start=data.qpos[:3].copy()
-        command=parse_command(phrase)
+        command=parse_command(phrase,labels)
         self.assertEqual(command.action,'pick')
         task.request_grasp(command.values[0])
         # Planning must not teleport either participant.
@@ -57,8 +59,8 @@ class ObjectTaskTests(unittest.TestCase):
             if control.grasp_monitor and control.grasp_monitor.held_seconds>=5:break
         self.assertLessEqual(max_base_step,walker.speed*model.opt.timestep+1e-10)
         self.assertGreater(np.linalg.norm(data.qpos[:2]-robot_start[:2]),.5)
-        self.assertTrue(any('Walking to '+OBJECTS[name]['label'] in msg for msg in messages))
-        self.assertTrue(any('Grasping '+OBJECTS[name]['label'] in msg for msg in messages))
+        self.assertTrue(any('Walking to '+label in msg for msg in messages))
+        self.assertTrue(any('Grasping '+label in msg for msg in messages))
         self.assertIsNone(task.pending)
         self.assertIsNotNone(control.grasp_monitor)
         evidence=control.grasp_monitor.evidence
@@ -77,14 +79,17 @@ class ObjectTaskTests(unittest.TestCase):
         active_start=control.demo_start
         finger_targets=control.grasp_hand_targets.copy()
         self.assertFalse(task.request_grasp(name))
-        self.assertEqual(messages[-1],'Already holding '+OBJECTS[name]['label']+'.')
+        self.assertEqual(messages[-1],'Already holding '+label+'.')
         self.assertFalse(task.request_grasp('bottle'))
-        self.assertIn('Still holding '+OBJECTS[name]['label'],messages[-1])
+        self.assertIn('Still holding '+label,messages[-1])
         self.assertEqual(control.demo_start,active_start)
         self.assertEqual(control.grasp_hand_targets,finger_targets)
 
     def test_red_mug_command_walks_then_grasps_with_opposing_contacts(self):
         self.run_named_grasp('mug','grab the red mug')
+
+    def test_observed_black_mug_grasp_from_camera_layout(self):
+        self.run_named_grasp('mug','pick up the Observed black mug','camera_table')
 
     def test_green_apple_command_walks_then_grasps_with_opposing_contacts(self):
         self.run_named_grasp('apple','pick up the green apple')

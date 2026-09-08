@@ -130,6 +130,9 @@ def build_scene(environment="lab", assisted=True):
     ET.SubElement(bottle, "geom", name="bottle_cap", type="cylinder", pos="0 0 0.087", size="0.016 0.012", mass="0.01", rgba="0.92 0.95 0.96 1")
     ET.SubElement(bottle, "site", name="bottle_center", size="0.003", rgba="1 0.5 0.1 1")
     add_props(world)
+    if config.get('camera_layout'):
+        from .table_alignment import apply_camera_layout
+        apply_camera_layout(world, asset, ROOT, config)
     ET.SubElement(world, "body", name="support_target", mocap="true", pos="0 0 0.79")
     ET.SubElement(section(robot, "equality"), "weld", name="base_support", body1="support_target", body2="pelvis", relpose="0 0 0 1 0 0 0", solref="0.01 1", active=str(assisted).lower())
     output = ROOT / "build" / f"{environment}.xml"

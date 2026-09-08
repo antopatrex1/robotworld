@@ -1,0 +1,9 @@
+{
+  "name": "Camera table · paper alignment",
+  "floor_color": "0.31 0.27 0.23",
+  "floor_alt": "0.34 0.3 0.26",
+  "world_manifest": "data/worlds/warm_living_room/manifest.json",
+  "furniture": [],
+  "camera_layout": "configs/calibration/paper_table.json",
+  "object_labels": {"mug": "Observed black mug"}
+}

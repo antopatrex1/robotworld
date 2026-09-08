@@ -9,7 +9,7 @@ class Command:
     values: tuple = ()
 
 
-def parse_command(text):
+def parse_command(text, object_labels=None):
     text=re.sub(r'\s+',' ',text.strip().lower()).rstrip('!?.,').strip()
     # Keep the action grammar bounded while accepting normal spoken requests.
     # These wrappers add no actions; the remaining command must still match in full.
@@ -37,7 +37,11 @@ def parse_command(text):
         if angle>360: raise ValueError('Choose a turn of 360 degrees or less.')
         return Command('turn',(angle*(1 if m[1]=='left' else -1),))
     for key,info in OBJECTS.items():
-        for alias in sorted(info['aliases'],key=len,reverse=True):
+        aliases = set(info['aliases'])
+        if object_labels and key in object_labels:
+            label = object_labels[key].lower()
+            aliases.update([label, label.removeprefix('observed ')])
+        for alias in sorted(aliases,key=len,reverse=True):
             if text in (f'go to {alias}',f'go to the {alias}',f'walk to {alias}',f'walk to the {alias}'):
                 return Command('approach',(key,))
             if text in (f'reach for {alias}',f'reach for the {alias}',f'touch {alias}',f'touch the {alias}'):

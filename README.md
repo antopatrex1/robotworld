@@ -2,7 +2,9 @@
 
 A local interactive MuJoCo simulation with the **exact [Warm and inviting living room](https://marble.worldlabs.ai/world/7f964e6d-dbdd-4cf7-a8fb-9292001f69ba)** requested by the user, a Unitree G1 with two five-finger Shadow hands, and ten labeled household objects on a physical table.
 
-Open **Start Robot World.command**, or run:
+Open **Start Robot World + RealSense.command** to launch the simulation and camera together. Enter your Mac password in Terminal for the camera helper. It reuses this checkout's Robot World server when already running and restarts the camera helper. Keep both Terminal sessions open; closing the RealSense window ends its camera helper. From a shell, run `./"Start Robot World + RealSense.command"` (add `--demo` for synthetic camera frames).
+
+For the simulation alone, open **Start Robot World.command**, or run:
 
 ```sh
 .venv/bin/python scripts/patch_viser.py
@@ -16,6 +18,16 @@ The viewer runs at **http://127.0.0.1:8765**. It stays local to this Mac and nee
 The [realsense](realsense/README.md) folder contains the native RGB-D camera window and MCP capture server imported from `oai6`. Open **realsense/Start RealSense.command**, or run `./realsense/scripts/start.sh`. Use `--demo` for a synthetic preview. Robot World's **RealSense · live camera** panel shares that helper and displays color, depth, and center distance alongside the simulation. Preview updates run independently at up to 10 Hz, reconnect automatically, and hide stale images when the camera disconnects. Uncheck **Show live camera** to pause the preview. Synthetic frames are labeled DEMO.
 
 The physical camera view is not registered to the simulated room, and depth is not aligned to color. The native viewer and MCP tools (`camera_status`, `capture_rgbd`) remain available. For a helper with a custom socket, launch Robot World with `--realsense-socket /path/to/camera.sock`.
+
+### Paper-aligned table snapshot
+
+Select **Camera table · paper alignment** from the environment menu to view the manually mapped snapshot, or launch with `--environment camera_table`. It maps the user's 210 × 147 mm paper to the virtual tabletop corner at `(0.91, -0.50, 0.725)` metres: the 210 mm edge runs along +Y, and the 147 mm edge runs along −X. The black mug's base is approximately 0.33 m along the edge and 0.10 m inward. The original ten demo objects are absent from this scene; return to **Warm and inviting living room** for the standard demo.
+
+[Calibration annotations](configs/calibration/paper_table.json) record the four paper corners and manually selected tabletop contact points from a saved 640×480 RGB frame. A planar homography maps those points to tabletop metres. This is a snapshot, not automatic detection or tracking, full camera-pose calibration, or depth-to-color alignment. Moving the camera, paper, or objects requires new annotations. The raw capture stays in ignored `realsense/captures/`.
+
+The mug is a physical simulation body using assumed cup dimensions and mass. The paper, card, connector, and visible cable are visual proxies without collision response; the cropped container and partial blue sheet are omitted. The mug handle orientation is illustrative. Use `pick up the Observed black mug` (or `pick up the black mug`) to grasp the simulated mug. Commands use its current simulated pose; they do not operate a physical robot or validate the real-world calibration. Navigation and scene reset remain available.
+
+The paper's shallow angle, curl, torn edge, and uncorrected lens distortion limit accuracy. A sensitivity check with paper corners perturbed by ±2 pixels gave mug coordinates of roughly 0.30–0.36 m along the edge and 0.09–0.12 m inward (5th–95th percentiles). This is sensitivity to annotation choices, **not** measured positioning accuracy. Check independent physical distances before using the layout for targeting.
 
 ## Prompt controls
 

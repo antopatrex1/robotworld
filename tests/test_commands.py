@@ -5,6 +5,15 @@ from robot_world.objects import OBJECTS
 
 
 class CommandTests(unittest.TestCase):
+    def test_scene_labels_and_short_observed_names_resolve(self):
+        labels={'mug':'Observed black mug'}
+        for phrase in ('pick up the Observed black mug','grab the black mug',
+                       'Can you pick the observed black mug up?'):
+            self.assertEqual(parse_command(phrase,labels),Command('pick',('mug',)))
+        self.assertEqual(parse_command('go to the observed black mug',labels),Command('approach',('mug',)))
+        with self.assertRaises(ValueError):
+            parse_command('pick up the observed black mug')
+
     def test_grab_red_mug_accepts_normal_request_wording(self):
         for text in (
             'grab the red mug',

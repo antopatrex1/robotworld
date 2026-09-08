@@ -52,9 +52,11 @@ class Workbench:
             self.commands.put(('prompt',self.prompt.value))
         run_button.on_click(submit_prompt)
         prompt_form.on_submit(submit_prompt)
-        gui.add_button('Grasp blue bottle',color='teal').on_click(lambda _:self.commands.put(('prompt','pick up the blue bottle')))
+        self.grasp_button=gui.add_button('Grasp blue bottle',color='teal')
+        self.grasp_button.on_click(lambda _:self.commands.put(('prompt','pick up the blue bottle')))
         self.reply=gui.add_markdown(self.last_reply)
         self.realsense=RealSensePanel(self.server, realsense_socket)
+        self.alignment_info=gui.add_markdown('',visible=False)
         with gui.add_folder('Try a command',expand_by_default=False):
             gui.add_markdown('`walk backward 1 meter`\n\n`walk to x 1.5 y 0.8`\n\n`go to the red mug`\n\n`reach for the blue bottle`\n\n`pick up the blue bottle`\n\n`grab the green apple`\n\n`open hands` · `turn left` · `stop`\n\nLocal commands understand these actions and object names.')
             for title,command in [('Walk around table','walk around the table'),('Reach for bottle','reach for the blue bottle'),('Open hands','open hands')]:
@@ -99,11 +101,16 @@ class Workbench:
         if self.path_handle: self.path_handle.remove();self.path_handle=None
         self.handles=[];self.geometry=[];self.labels=[];self.axis_labels=[];self.followup=None
         self.model,self.data,self.config,_=build_scene(environment)
+        self.grasp_button.disabled=bool(self.config.get('camera_layout'))
+        self.prompt.value='pick up the Observed black mug' if self.config.get('camera_layout') else 'grab the red mug'
+        self.alignment_info.visible=bool(self.config.get('camera_layout'))
+        if self.config.get('camera_layout'):
+            self.alignment_info.content='**Paper-aligned snapshot · approximate**\n\n210 × 147 mm paper anchored to the table corner. Black mug position mapped from its base; mug size is illustrative. Flat card and cable are visual proxies. Cropped items omitted.\n\nObjects are not tracked live. Camera movement invalidates this alignment. You can pick up the simulated mug using its displayed name. This does not control a physical robot.'
         self.control=Controller(self.model,self.data)
         self.planner=Planner(self.config)
         gait=SomaMotion(ROOT/'vendor/soma-retargeter/assets/motions/csv/Neutral_walk_forward_002__A057.csv',self.model,self.data.qpos)
         self.walker=Walker(self.control,gait)
-        self.object_tasks=ObjectTaskRunner(self.control,self.walker,self.planner,self.start_path,self.say)
+        self.object_tasks=ObjectTaskRunner(self.control,self.walker,self.planner,self.start_path,self.say,self.config.get('object_labels'))
         self.room=None
         if self.config.get('world_manifest'):
             manifest=json.loads((ROOT/self.config['world_manifest']).read_text())
@@ -118,11 +125,13 @@ class Workbench:
         self.grid=self.add_handle(self.server.scene.add_grid('/grid',width=12,height=12,cell_size=.5,section_size=1,
             cell_color=(135,148,151),section_color=(186,200,200),plane_opacity=0,position=(0,0,.015)))
         for key,info in OBJECTS.items():
-            handle=self.make_label('/labels/'+key,info['label'],self.data.body(key).xpos,height=.085)
+            if mujoco.mj_name2id(self.model,mujoco.mjtObj.mjOBJ_BODY,key)<0: continue
+            title=self.config.get('object_labels',{}).get(key,info['label'])
+            handle=self.make_label('/labels/'+key,title,self.data.body(key).xpos,height=.085)
             self.labels.append((key,handle))
         self.leaders=self.add_handle(self.server.scene.add_line_segments('/label_leaders',points=np.zeros((10,2,3),dtype=np.float32),colors=(130,213,199),line_width=1))
         self.paused=False
-        self.say('Ready in '+self.config['name']+'. Ten movable objects are on the table.')
+        self.say('Ready in '+self.config['name']+('. Approximate camera snapshot loaded; black mug, paper, card and visible cable.' if self.config.get('camera_layout') else '. Ten movable objects are on the table.'))
         self.camera('robot')
         for client in self.server.get_clients().values():
             for _,label in self.labels+self.axis_labels: label.wxyz=client.camera.wxyz
@@ -209,6 +218,9 @@ class Workbench:
             evidence=self.control.grasp_monitor.evidence
             self.telemetry.content+=f'\n\nGrasp: {100*evidence.get("lift_m",0):.1f} cm lift · {evidence.get("hand_contacts",0)} contacts · {evidence.get("held_seconds",0):.1f} s held'
 
+    def object_label(self,name):
+        return self.config.get('object_labels',{}).get(name,OBJECTS[name]['label'])
+
     def say(self,text):
         self.last_reply=text;self.reply.content=text
         print(text,flush=True)
@@ -221,7 +233,10 @@ class Workbench:
         self.walker.begin(path)
 
     def execute(self,text):
-        command=parse_command(text);action,values=command.action,command.values
+        command=parse_command(text,self.config.get('object_labels'));action,values=command.action,command.values
+        if action in ('pick','reach','approach'):
+            if mujoco.mj_name2id(self.model,mujoco.mjtObj.mjOBJ_BODY,values[0])<0:
+                raise ValueError('That object is not present in this scene.')
         self.object_tasks.cancel()
         self.say('Received: '+text.strip())
         if action=='stop':
@@ -230,7 +245,7 @@ class Workbench:
         if action=='reset':
             self.control.reset();self.walker.stop();self.walker.yaw=0;self.walker.target_yaw=0;self.followup=None
             if self.path_handle: self.path_handle.remove();self.path_handle=None
-            self.say('Scene reset. Robot and ten table objects are back at their starting positions.');return
+            self.say('Scene reset. Robot and table objects are back at their starting positions.');return
         if action=='hands':
             self.control.hand_closure=values[0];self.control.demo_start=None;self.control.grasp_hand_targets=None
             self.control.status='Hands open' if values[0]==0 else 'Hands closed'
@@ -248,9 +263,9 @@ class Workbench:
             self.walker.stop();self.control.demo_start=None
             target=self.data.body(values[0]).xpos.copy()+np.array([0,0,.06])
             pose,error=solve_arm_ik(self.model,self.data.qpos,target,iterations=200)
-            if error>.045: raise ValueError(f'{OBJECTS[values[0]]["label"]} is out of reach from here. Try: grab the {OBJECTS[values[0]]["label"].lower()}.')
+            if error>.045: raise ValueError(f'{self.object_label(values[0])} is out of reach from here. Try: grab the {self.object_label(values[0]).lower()}.')
             self.control.target_qpos=pose;self.control.last_ik_error=error;self.control.status='Reaching with right five-finger hand'
-            self.say(f'Reaching for {OBJECTS[values[0]]["label"]}.')
+            self.say(f'Reaching for {self.object_label(values[0])}.')
             return
         p=self.data.mocap_pos[0,:2].copy()
         if action=='tour':
@@ -286,7 +301,7 @@ class Workbench:
             if not paths: raise ValueError('No clear stance near that object. Try resetting the scene.')
             _,path=min(paths,key=lambda v:v[0]);goal=path[-1]
             self.start_path(path);self.followup=('face',obj)
-            self.say('Walking to '+OBJECTS[values[0]]['label']+'.');return
+            self.say('Walking to '+self.object_label(values[0])+'.');return
         else: raise ValueError('That action is not supported yet.')
         self.followup=None
         self.start_path(self.planner.plan(p,goal));self.say(f'Walking to X {goal[0]:.2f}, Y {goal[1]:.2f} metres.')
@@ -317,7 +332,7 @@ class Workbench:
             monitor=self.control.grasp_monitor
             if monitor is not None and self.control.demo_start is not None and not self.grasp_result_notified:
                 if monitor.held_seconds>=1:
-                    self.say(f'Holding {OBJECTS[monitor.object_name]["label"]}: {100*monitor.evidence["lift_m"]:.1f} cm lift confirmed by finger contacts.')
+                    self.say(f'Holding {self.object_label(monitor.object_name)}: {100*monitor.evidence["lift_m"]:.1f} cm lift confirmed by finger contacts.')
                     self.grasp_result_notified=True
                 elif self.control.status.startswith(('Grasp missed','Lift was not secured','Object slipped')):
                     self.say(self.control.status);self.grasp_result_notified=True

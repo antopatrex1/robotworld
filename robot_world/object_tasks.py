@@ -23,6 +23,13 @@ def grasp_stance_candidates(object_name,position):
     """Prefer task-tested stances, then consider other table edges."""
     if object_name in ('mug','apple'):
         yield position+[-.06,-.45],math.radians(110)
+        # Preserve the tested object-to-right-hand geometry at other table
+        # edges. Facing the object directly does not give the same arm reach.
+        for angle in (90, -90, 180):
+            turn=math.radians(angle)
+            rotation=np.array([[math.cos(turn),-math.sin(turn)],
+                               [math.sin(turn),math.cos(turn)]])
+            yield position+rotation@np.array([-.06,-.45]),math.radians(110)+turn
     else:
         yield position+[-.28,.27],0.
     for offset in (0,-.1,.1,-.2,.2):
@@ -34,10 +41,14 @@ def grasp_stance_candidates(object_name,position):
 
 
 class ObjectTaskRunner:
-    def __init__(self,control,walker,planner,start_path,notify):
+    def __init__(self,control,walker,planner,start_path,notify,object_labels=None):
         self.control,self.walker,self.planner=control,walker,planner
         self.start_path,self.notify=start_path,notify
         self.pending=None
+        self.object_labels=object_labels or {}
+
+    def label(self,name):
+        return self.object_labels.get(name,OBJECTS[name]['label'])
 
     def cancel(self):
         self.pending=None
@@ -46,7 +57,7 @@ class ObjectTaskRunner:
         c=self.control;m,d=c.model,c.data
         monitor=c.grasp_monitor
         if monitor is not None and monitor.evidence.get('held_seconds',0)>0:
-            label=OBJECTS[monitor.object_name]['label']
+            label=self.label(monitor.object_name)
             if monitor.object_name==name:
                 self.notify(f'Already holding {label}.')
             else:
@@ -55,13 +66,13 @@ class ObjectTaskRunner:
         self.cancel()
         self.walker.stop();c.motion=None;c.demo_start=None
         if d.body(name).xpos[2]<.70:
-            raise ValueError(f'{OBJECTS[name]["label"]} is off the table. Reset the scene before retrying.')
+            raise ValueError(f'{self.label(name)} is off the table. Reset the scene before retrying.')
         try:
             c.start_pick(name)
         except ValueError:
             pass
         else:
-            self.notify(f'Grasping {OBJECTS[name]["label"]}: positioning, closing, then lifting.')
+            self.notify(f'Grasping {self.label(name)}: positioning, closing, then lifting.')
             return True
         position=d.body(name).xpos[:2].copy()
         # A feasibility check uses a separate MuJoCo data object. The live robot
@@ -84,13 +95,13 @@ class ObjectTaskRunner:
                 continue
             planned=(path,yaw,np.asarray(goal)-position);break
         if planned is None:
-            raise ValueError(f'I could not find a clear, reachable grasp for {OBJECTS[name]["label"]} in its current position.')
+            raise ValueError(f'I could not find a clear, reachable grasp for {self.label(name)} in its current position.')
         c.grasp_monitor=None;c.grasp_hand_targets=None;c.hand_closure=0.
         c.target_qpos=c.home_qpos.copy()
         path,yaw,offset=planned
         self.pending=PendingObjectTask(name,yaw,offset)
         self.start_path(path)
-        self.notify(f'Walking to {OBJECTS[name]["label"]}, then I will grasp it.')
+        self.notify(f'Walking to {self.label(name)}, then I will grasp it.')
         return True
 
     def tick(self):
@@ -105,7 +116,7 @@ class ObjectTaskRunner:
             task.phase_started=c.data.time
             c.target_qpos=c.home_qpos.copy()
             c.gravity_compensation=True
-            self.notify(f'Aligning the hand with {OBJECTS[task.object_name]["label"]}.')
+            self.notify(f'Aligning the hand with {self.label(task.object_name)}.')
         if task.phase=='aligning':
             if c.data.time-task.phase_started>10:
                 self.pending=None;self.walker.stop()
@@ -125,11 +136,11 @@ class ObjectTaskRunner:
                     self.pending=None;self.notify(str(error));return
                 task.phase='walking';task.aligned_since=None;task.adjustments+=1
                 self.start_path(path)
-                self.notify(f'Adjusting the stance to {OBJECTS[task.object_name]["label"]}’s current position.')
+                self.notify(f'Adjusting the stance to {self.label(task.object_name)}’s current position.')
                 return
             self.pending=None
             try:
                 c.start_pick(task.object_name)
             except ValueError as error:
                 self.notify(str(error));return
-            self.notify(f'Grasping {OBJECTS[task.object_name]["label"]}: closing fingers, then lifting.')
+            self.notify(f'Grasping {self.label(task.object_name)}: closing fingers, then lifting.')
