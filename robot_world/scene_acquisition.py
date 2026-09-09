@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL = ROOT / 'data/models/yolo11s-seg.pt'
 CLASS_KIND = {'cup':'mug', 'bottle':'bottle', 'bowl':'bowl', 'apple':'apple',
               'orange':'ball', 'sports ball':'ball', 'book':'book',
-              'remote':'remote', 'mouse':'proxy', 'cell phone':'proxy',
+              'remote':'remote', 'mouse':'mouse', 'cell phone':'proxy',
               'keyboard':'proxy', 'banana':'proxy', 'scissors':'proxy',
               'vase':'proxy', 'wine glass':'proxy', 'fork':'proxy',
               'knife':'proxy', 'spoon':'proxy'}

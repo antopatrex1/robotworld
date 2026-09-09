@@ -86,7 +86,7 @@ class Workbench:
             self.show_grid=gui.add_checkbox('Floor grid',True)
             self.speed=gui.add_slider('Walking speed (m/s)',min=.1,max=.5,step=.05,initial_value=.3)
         self.telemetry=gui.add_markdown('Loading physics…')
-        gui.add_markdown('**Prototype mode**\n\nWalking uses base support. Room collisions are approximate. Bottle, mug, and apple grasps are tested locally. Other object grasps remain experimental.\n\nDrag to orbit · right-drag to pan · scroll to zoom.')
+        gui.add_markdown('**Prototype mode**\n\nWalking uses base support. Room collisions are approximate. Bottle, mug, apple, and mouse grasps are tested locally. Other object grasps remain experimental.\n\nDrag to orbit · right-drag to pan · scroll to zoom.')
         self.load(environment)
         @self.server.on_client_connect
         def on_connect(client):
@@ -255,7 +255,7 @@ class Workbench:
             if mujoco.mj_name2id(self.model,mujoco.mjtObj.mjOBJ_BODY,values[0])<0:
                 raise ValueError('That object is not present in this scene.')
             if action=='pick' and 'graspable_objects' in self.config and values[0] not in self.config['graspable_objects']:
-                raise ValueError(f'I recognize {self.object_label(values[0])}, but its simulated shape does not have a supported grasp yet. I can approach it: try "go to the {self.object_label(values[0])}". Pickups currently support mugs, bottles, and apples.')
+                raise ValueError(f'I recognize {self.object_label(values[0])}, but its simulated shape does not have a supported grasp yet. I can approach it: try "go to the {self.object_label(values[0])}". Pickups currently support mugs, bottles, apples, and mice.')
         self.object_tasks.cancel()
         self.say('Received: '+text.strip())
         if action=='stop':

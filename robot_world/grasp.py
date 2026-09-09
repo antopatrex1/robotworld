@@ -3,6 +3,10 @@ from dataclasses import dataclass, field
 import mujoco
 import numpy as np
 
+# The low mouse uses thumb opposition and a stance that reaches its center.
+MOUSE_PALM_DEPTH = -.04
+MOUSE_THUMB_BASE = .7
+
 
 def contact_summary(model, data, object_name):
     object_id=model.body(object_name).id
@@ -54,7 +58,10 @@ class SideGraspPlan:
         self.model=model
         self.object_name=object_name
         kind=object_name.split('_')[0]
-        low_object=kind in ('mug','apple')
+        if mujoco.mj_name2id(model,mujoco.mjtObj.mjOBJ_SITE,object_name+'_mouse_grasp')>=0:
+            kind='mouse'
+        self.kind=kind
+        low_object=kind in ('mug','apple','mouse')
         self.clearance_duration=3. if low_object else 8.
         self.close_time=self.clearance_duration+3.
         self.lift_time=self.clearance_duration+5.
@@ -73,7 +80,7 @@ class SideGraspPlan:
             # a vertical finger row instead.
             rotation=rotation@Rotation.from_euler('z',-np.pi/2).as_matrix()
         # The curved finger pads and opposing thumb enclose this palm-local point.
-        palm_depth={'mug':-.035,'apple':-.04}.get(kind,-.047)
+        palm_depth={'mug':-.035,'apple':-.04,'mouse':MOUSE_PALM_DEPTH}.get(kind,-.047)
         object_in_palm=np.array([0,palm_depth,.11])
         target=self.origin-rotation@(object_in_palm-np.array([0,-.035,.09]))
         pre=target+rotation@np.array([0,.10,0])
@@ -101,7 +108,7 @@ class SideGraspPlan:
         self.prepose,self.grasp,self.lift=prepose,grasp,lift
         self.lift_poses=[grasp]
         for height in np.linspace(0,self.lift_height,61)[1:]:
-            pose,error=solve_ik(model,self.lift_poses[-1],target+[0,0,height],rotation,iterations=100)
+            pose,error=solve_ik(model,self.lift_poses[-1],target+[0,0,height],rotation,iterations=300 if kind=='mouse' else 100)
             if error>.015: raise ValueError('The arm cannot follow a clear lift from this position.')
             self.lift_poses.append(pose)
         self.lift=self.lift_poses[-1]
@@ -149,7 +156,7 @@ class SideGraspPlan:
                 if joint.endswith('J3'): value=.65*self.closure
                 elif joint.endswith('J0'): value=2.2*self.closure
             elif joint.startswith('TH'):
-                thumb_base=.7 if self.object_name.split('_')[0]=='apple' else 1.047
+                thumb_base=MOUSE_THUMB_BASE if self.kind=='mouse' else (.7 if self.kind=='apple' else 1.047)
                 value={'THJ5':thumb_base,'THJ4':1.059,'THJ3':0.,'THJ2':.65,'THJ1':0.}[joint]*self.thumb_ready
                 if joint=='THJ4' and elapsed>=8: value=.4+(1.059-.4)*self.closure
             targets[aid]=value

@@ -19,17 +19,18 @@ class PendingObjectTask:
     adjustments: int = 0
 
 
-def grasp_stance_candidates(object_name,position):
+def grasp_stance_candidates(object_name,position,is_mouse=False):
     """Prefer task-tested stances, then consider other table edges."""
-    if object_name.split('_')[0] in ('mug','apple'):
-        yield position+[-.06,-.45],math.radians(110)
+    if is_mouse or object_name.split('_')[0] in ('mug','apple','mouse'):
+        offset=np.array([-.12,-.42] if is_mouse or object_name.split('_')[0]=='mouse' else [-.06,-.45])
+        yield position+offset,math.radians(110)
         # Preserve the tested object-to-right-hand geometry at other table
         # edges. Facing the object directly does not give the same arm reach.
         for angle in (90, -90, 180):
             turn=math.radians(angle)
             rotation=np.array([[math.cos(turn),-math.sin(turn)],
                                [math.sin(turn),math.cos(turn)]])
-            yield position+rotation@np.array([-.06,-.45]),math.radians(110)+turn
+            yield position+rotation@offset,math.radians(110)+turn
     else:
         yield position+[-.28,.27],0.
     for offset in (0,-.1,.1,-.2,.2):
@@ -78,7 +79,7 @@ class ObjectTaskRunner:
         # A feasibility check uses a separate MuJoCo data object. The live robot
         # reaches the chosen stance using Walker; its pose is never teleported.
         planned=None
-        for goal,yaw in grasp_stance_candidates(name,position):
+        for goal,yaw in grasp_stance_candidates(name,position,mujoco.mj_name2id(m,mujoco.mjtObj.mjOBJ_SITE,name+'_mouse_grasp')>=0):
             if not self.planner.free(goal):continue
             hypothetical=mujoco.MjData(m)
             hypothetical.qpos[:]=d.qpos

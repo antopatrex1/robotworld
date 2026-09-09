@@ -111,6 +111,9 @@ def apply_detected_layout(world, asset, calibration, config):
     config['graspable_objects'] = []
     for item in calibration['objects']:
         name, kind = item['id'], item['kind']
+        # Upgrade saved mouse detections without changing their command IDs.
+        if kind=='proxy' and item.get('category')=='mouse' and item.get('confidence',1)>=.5:
+            kind='mouse'
         xy = project(matrix,[item['base_pixel']])
         position = table_to_world(calibration,xy)[0]
         rgba = ' '.join(map(str,np.r_[np.asarray(item['color_rgb']) / 255.,1]))
@@ -126,13 +129,16 @@ def apply_detected_layout(world, asset, calibration, config):
         else:
             body = ET.Element('body',name=name)
             ET.SubElement(body,'freejoint',name=name+'_free')
-            position[2] += .018
-            ET.SubElement(body,'geom',name=name+'_body',type='ellipsoid',size='.055 .033 .018',
+            height = .023 if kind=='mouse' else .018
+            position[2] += height
+            ET.SubElement(body,'geom',name=name+'_body',type='ellipsoid',size=f'.055 .033 {height}',
                           rgba=rgba,mass='.08',friction='1 .01 .001')
+        if kind=='mouse':
+            ET.SubElement(body,'site',name=name+'_mouse_grasp',size='.001',rgba='0 0 0 0')
         body.set('pos',' '.join(map(str,position)))
         world.append(body)
         config['object_labels'][name] = item['label']
-        if kind in ('mug','bottle','apple'):
+        if kind in ('mug','bottle','apple','mouse'):
             config['graspable_objects'].append(name)
     width,length = calibration['paper_size_m']
     center = table_to_world(calibration,[[width/2,length/2]])[0]+[0,0,.0004]
