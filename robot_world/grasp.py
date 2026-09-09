@@ -53,13 +53,14 @@ class SideGraspPlan:
     def __init__(self,model,data,object_name,solve_ik):
         self.model=model
         self.object_name=object_name
-        low_object=object_name in ('mug','apple')
+        kind=object_name.split('_')[0]
+        low_object=kind in ('mug','apple')
         self.clearance_duration=3. if low_object else 8.
         self.close_time=self.clearance_duration+3.
         self.lift_time=self.clearance_duration+5.
         # Leave clearance margin for cup settling within the fingers, including
         # approaches from other table edges. IK still validates the whole lift.
-        self.lift_height=.20 if object_name=='mug' else .18
+        self.lift_height=.20 if kind=='mug' else .18
         self.origin=data.body(object_name).xpos.copy()
         if self.origin[2]<.70:
             raise ValueError('The object is off the table. Reset the scene before retrying the grasp.')
@@ -72,7 +73,7 @@ class SideGraspPlan:
             # a vertical finger row instead.
             rotation=rotation@Rotation.from_euler('z',-np.pi/2).as_matrix()
         # The curved finger pads and opposing thumb enclose this palm-local point.
-        palm_depth={'mug':-.035,'apple':-.04}.get(object_name,-.047)
+        palm_depth={'mug':-.035,'apple':-.04}.get(kind,-.047)
         object_in_palm=np.array([0,palm_depth,.11])
         target=self.origin-rotation@(object_in_palm-np.array([0,-.035,.09]))
         pre=target+rotation@np.array([0,.10,0])
@@ -148,7 +149,7 @@ class SideGraspPlan:
                 if joint.endswith('J3'): value=.65*self.closure
                 elif joint.endswith('J0'): value=2.2*self.closure
             elif joint.startswith('TH'):
-                thumb_base=.7 if self.object_name=='apple' else 1.047
+                thumb_base=.7 if self.object_name.split('_')[0]=='apple' else 1.047
                 value={'THJ5':thumb_base,'THJ4':1.059,'THJ3':0.,'THJ2':.65,'THJ1':0.}[joint]*self.thumb_ready
                 if joint=='THJ4' and elapsed>=8: value=.4+(1.059-.4)*self.closure
             targets[aid]=value

@@ -50,7 +50,8 @@ class Controller:
         self.reference_hands = False
         self._reference_data = mujoco.MjData(model)
         self.peak_lift = 0.0
-        self.pick_object = "bottle" if mujoco.mj_name2id(model,mujoco.mjtObj.mjOBJ_BODY,'bottle') >= 0 else "mug"
+        free_objects=[model.body(model.jnt_bodyid[j]).name for j in range(1,model.njnt) if model.jnt_type[j]==mujoco.mjtJoint.mjJNT_FREE]
+        self.pick_object = 'bottle' if 'bottle' in free_objects else (free_objects[0] if free_objects else None)
         self.grasp_plan = None
         self.grasp_monitor = None
         self.grasp_hand_targets = None
@@ -191,11 +192,11 @@ class Controller:
             self.peak_lift = max(self.peak_lift, float(self.data.body(self.pick_object).xpos[2] - self._grasp_origin[2]))
 
     def metrics(self):
-        evidence = contact_summary(self.model,self.data,self.pick_object)
+        evidence = contact_summary(self.model,self.data,self.pick_object) if self.pick_object else {'hand_contacts':0,'hand_parts':[],'normal_force_n':0.,'environment_contacts':0}
         if self.grasp_monitor is not None: evidence.update(self.grasp_monitor.evidence)
         bottle_position = self.data.body('bottle').xpos.tolist() if mujoco.mj_name2id(self.model,mujoco.mjtObj.mjOBJ_BODY,'bottle') >= 0 else None
         return {"time": round(self.data.time,3), "bottle_position": bottle_position,
-                "object_name": self.pick_object,"object_position":self.data.body(self.pick_object).xpos.tolist(),
+                "object_name": self.pick_object,"object_position":self.data.body(self.pick_object).xpos.tolist() if self.pick_object else None,
                 "hand_object_contacts":evidence['hand_contacts'],"grasp_evidence":evidence,
                 "ik_position_error_m": self.last_ik_error,
                 "base_support_active":bool(self.data.eq_active[self.model.equality("base_support").id]),

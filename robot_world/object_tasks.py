@@ -21,7 +21,7 @@ class PendingObjectTask:
 
 def grasp_stance_candidates(object_name,position):
     """Prefer task-tested stances, then consider other table edges."""
-    if object_name in ('mug','apple'):
+    if object_name.split('_')[0] in ('mug','apple'):
         yield position+[-.06,-.45],math.radians(110)
         # Preserve the tested object-to-right-hand geometry at other table
         # edges. Facing the object directly does not give the same arm reach.
@@ -48,7 +48,7 @@ class ObjectTaskRunner:
         self.object_labels=object_labels or {}
 
     def label(self,name):
-        return self.object_labels.get(name,OBJECTS[name]['label'])
+        return self.object_labels.get(name,OBJECTS.get(name,{'label':name})['label'])
 
     def cancel(self):
         self.pending=None

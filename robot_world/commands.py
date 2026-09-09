@@ -36,7 +36,11 @@ def parse_command(text, object_labels=None):
         angle=float(m[2] or 90)
         if angle>360: raise ValueError('Choose a turn of 360 degrees or less.')
         return Command('turn',(angle*(1 if m[1]=='left' else -1),))
-    for key,info in OBJECTS.items():
+    catalog = dict(OBJECTS)
+    for key,label in (object_labels or {}).items():
+        if key not in catalog:
+            catalog[key] = {"label":label,"aliases":[]}
+    for key,info in catalog.items():
         aliases = set(info['aliases'])
         if object_labels and key in object_labels:
             label = object_labels[key].lower()

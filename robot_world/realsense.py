@@ -107,11 +107,16 @@ def depth_preview(frame):
 
 
 class RealSensePanel:
-    def __init__(self, server, path=DEFAULT_SOCKET):
+    def __init__(self, server, path=DEFAULT_SOCKET, on_acquire=None):
         self.server = server
         self.path = path
         self.stop = threading.Event()
+        self.acquire_lock = threading.Lock()
+        self.on_acquire = on_acquire
         with server.gui.add_folder('RealSense · live camera', expand_by_default=True):
+            self.acquire_button = server.gui.add_button('Acquire Scene', color='teal', disabled=on_acquire is None)
+            self.acquire_status = server.gui.add_markdown('Keep the 210 × 147 mm paper flat at the table corner. Acquire Scene takes a new photo, replaces the table objects, and resets the simulated robot.')
+            self.acquire_button.on_click(lambda _: self.request_acquisition())
             self.enabled = server.gui.add_checkbox('Show live camera', True)
             self.status = server.gui.add_markdown('Connecting to RealSense…')
             empty = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -125,6 +130,22 @@ class RealSensePanel:
     def close(self):
         self.stop.set()
         self.thread.join(timeout=2)
+
+    def request_acquisition(self):
+        if self.on_acquire is not None and self.acquire_lock.acquire(blocking=False):
+            self.acquire_button.disabled = True
+            self.acquire_status.content = 'Capturing a new scene…'
+            try:
+                self.on_acquire()
+            except Exception:
+                self.finish_acquisition('Scene acquisition could not start. Please retry.')
+                raise
+
+    def finish_acquisition(self, message):
+        self.acquire_status.content = message
+        self.acquire_button.disabled = False
+        if self.acquire_lock.locked():
+            self.acquire_lock.release()
 
     def _run(self):
         previous = None

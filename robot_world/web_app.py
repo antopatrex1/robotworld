@@ -5,7 +5,9 @@ import math
 import queue
 import time
 import traceback
+import threading
 import webbrowser
+from pathlib import Path
 
 import mujoco
 import numpy as np
@@ -22,6 +24,7 @@ from .splats import load_world_splats
 from .labels import text_card
 from .object_tasks import ObjectTaskRunner
 from .realsense import RealSensePanel, DEFAULT_SOCKET
+from .scene_acquisition import SceneAcquirer
 
 
 class Workbench:
@@ -31,6 +34,16 @@ class Workbench:
         self.server.gui.configure_theme(control_layout='floating',control_width='medium',dark_mode=True,
             show_logo=False,show_share_button=False,brand_color=(32,185,165))
         self.commands=queue.Queue()
+        self.scene_generation=0
+        self.current_environment=environment
+        self.acquirer=SceneAcquirer()
+        self.acquired_layout=None
+        saved=ROOT/'build/last_acquired_scene.json'
+        if saved.exists():
+            try:
+                candidate=Path(json.loads(saved.read_text())['layout'])
+                if candidate.is_file():self.acquired_layout=candidate
+            except (ValueError,OSError,KeyError):pass
         self.handles=[];self.geometry=[];self.labels=[];self.axis_labels=[];self.path_handle=None
         self.followup=None;self.last_reply='Ready. Give the robot a command.'
         self.paused=False
@@ -42,7 +55,7 @@ class Workbench:
             raise ValueError('Scene assets are missing. Run scripts/bootstrap_assets.py or use --environment lab.')
         self.environments=options
         self.environment=gui.add_dropdown('3D environment',tuple(options),initial_value=next(k for k,v in options.items() if v==environment))
-        self.environment.on_update(lambda _:self.commands.put(('environment',options[self.environment.value])))
+        self.environment.on_update(lambda _:self.commands.put(('environment',options[self.environment.value])) if options[self.environment.value]!=self.current_environment else None)
         with gui.add_form(None) as prompt_form:
             self.prompt=gui.add_text('Ask the robot',initial_value='grab the red mug',multiline=False,
                                      hint='Press Enter or click Run command.')
@@ -55,7 +68,7 @@ class Workbench:
         self.grasp_button=gui.add_button('Grasp blue bottle',color='teal')
         self.grasp_button.on_click(lambda _:self.commands.put(('prompt','pick up the blue bottle')))
         self.reply=gui.add_markdown(self.last_reply)
-        self.realsense=RealSensePanel(self.server, realsense_socket)
+        self.realsense=RealSensePanel(self.server, realsense_socket, on_acquire=lambda:self.commands.put(('acquire',None)))
         self.alignment_info=gui.add_markdown('',visible=False)
         with gui.add_folder('Try a command',expand_by_default=False):
             gui.add_markdown('`walk backward 1 meter`\n\n`walk to x 1.5 y 0.8`\n\n`go to the red mug`\n\n`reach for the blue bottle`\n\n`pick up the blue bottle`\n\n`grab the green apple`\n\n`open hands` · `turn left` · `stop`\n\nLocal commands understand these actions and object names.')
@@ -96,16 +109,20 @@ class Workbench:
         for c in clients:
             c.camera.position=position;c.camera.look_at=target;c.camera.up_direction=(0,0,1)
 
-    def load(self,environment):
+    def load(self,environment,prepared_scene=None):
+        prepared_scene=prepared_scene or build_scene(environment,camera_layout=self.acquired_layout if environment=='camera_table' else None)
+        self.scene_generation+=1
+        self.current_environment=environment
         for handle in self.handles: handle.remove()
         if self.path_handle: self.path_handle.remove();self.path_handle=None
         self.handles=[];self.geometry=[];self.labels=[];self.axis_labels=[];self.followup=None
-        self.model,self.data,self.config,_=build_scene(environment)
+        self.model,self.data,self.config,_=prepared_scene
         self.grasp_button.disabled=bool(self.config.get('camera_layout'))
-        self.prompt.value='pick up the Observed black mug' if self.config.get('camera_layout') else 'grab the red mug'
+        target=next(iter(self.config.get('graspable_objects',self.config.get('object_labels',{}))),None)
+        self.prompt.value=(('pick up the '+self.config['object_labels'][target]) if target else 'walk around the table') if self.config.get('camera_layout') else 'grab the red mug'
         self.alignment_info.visible=bool(self.config.get('camera_layout'))
         if self.config.get('camera_layout'):
-            self.alignment_info.content='**Paper-aligned snapshot · approximate**\n\n210 × 147 mm paper anchored to the table corner. Black mug position mapped from its base; mug size is illustrative. Flat card and cable are visual proxies. Cropped items omitted.\n\nObjects are not tracked live. Camera movement invalidates this alignment. You can pick up the simulated mug using its displayed name. This does not control a physical robot.'
+            self.alignment_info.content='**Paper-aligned snapshot · approximate**\n\n210 × 147 mm paper anchored to the table corner. Objects are placed from their detected tabletop contact points. Shapes and sizes are approximate; cropped or unsupported items may be omitted.\n\nObjects are not tracked live. Camera movement invalidates this alignment. Use an object’s displayed name in commands. Acquire Scene takes another snapshot. This does not control a physical robot.'
         self.control=Controller(self.model,self.data)
         self.planner=Planner(self.config)
         gait=SomaMotion(ROOT/'vendor/soma-retargeter/assets/motions/csv/Neutral_walk_forward_002__A057.csv',self.model,self.data.qpos)
@@ -124,14 +141,14 @@ class Workbench:
         self.robot_axes=self.add_handle(self.server.scene.add_frame('/robot_axes',axes_length=.3,axes_radius=.006))
         self.grid=self.add_handle(self.server.scene.add_grid('/grid',width=12,height=12,cell_size=.5,section_size=1,
             cell_color=(135,148,151),section_color=(186,200,200),plane_opacity=0,position=(0,0,.015)))
-        for key,info in OBJECTS.items():
+        labeled=self.config.get('object_labels') if self.config.get('camera_layout') else {key:info['label'] for key,info in OBJECTS.items()}
+        for key,title in labeled.items():
             if mujoco.mj_name2id(self.model,mujoco.mjtObj.mjOBJ_BODY,key)<0: continue
-            title=self.config.get('object_labels',{}).get(key,info['label'])
             handle=self.make_label('/labels/'+key,title,self.data.body(key).xpos,height=.085)
             self.labels.append((key,handle))
         self.leaders=self.add_handle(self.server.scene.add_line_segments('/label_leaders',points=np.zeros((10,2,3),dtype=np.float32),colors=(130,213,199),line_width=1))
         self.paused=False
-        self.say('Ready in '+self.config['name']+('. Approximate camera snapshot loaded; black mug, paper, card and visible cable.' if self.config.get('camera_layout') else '. Ten movable objects are on the table.'))
+        self.say('Ready in '+self.config['name']+(f'. Camera snapshot loaded with {len(self.labels)} objects.' if self.config.get('camera_layout') else '. Ten movable objects are on the table.'))
         self.camera('robot')
         for client in self.server.get_clients().values():
             for _,label in self.labels+self.axis_labels: label.wxyz=client.camera.wxyz
@@ -205,7 +222,7 @@ class Workbench:
                     label.wxyz=camera.wxyz
                 label.position=position;label.visible=self.show_labels.value
                 leaders.append([obj+np.array([0,0,.05]),position])
-            self.leaders.points=np.asarray(leaders,dtype=np.float32)
+            self.leaders.points=np.asarray(leaders,dtype=np.float32).reshape(-1,2,3)
             self.leaders.visible=self.show_labels.value
             self.axes.visible=self.show_axes.value;self.robot_axes.visible=self.show_axes.value
             for _,label in self.axis_labels: label.visible=self.show_axes.value
@@ -219,7 +236,7 @@ class Workbench:
             self.telemetry.content+=f'\n\nGrasp: {100*evidence.get("lift_m",0):.1f} cm lift · {evidence.get("hand_contacts",0)} contacts · {evidence.get("held_seconds",0):.1f} s held'
 
     def object_label(self,name):
-        return self.config.get('object_labels',{}).get(name,OBJECTS[name]['label'])
+        return self.config.get('object_labels',{}).get(name,OBJECTS.get(name,{'label':name})['label'])
 
     def say(self,text):
         self.last_reply=text;self.reply.content=text
@@ -237,6 +254,8 @@ class Workbench:
         if action in ('pick','reach','approach'):
             if mujoco.mj_name2id(self.model,mujoco.mjtObj.mjOBJ_BODY,values[0])<0:
                 raise ValueError('That object is not present in this scene.')
+            if action=='pick' and 'graspable_objects' in self.config and values[0] not in self.config['graspable_objects']:
+                raise ValueError(f'I recognize {self.object_label(values[0])}, but its simulated shape does not have a supported grasp yet. I can approach it: try "go to the {self.object_label(values[0])}". Pickups currently support mugs, bottles, and apples.')
         self.object_tasks.cancel()
         self.say('Received: '+text.strip())
         if action=='stop':
@@ -306,6 +325,39 @@ class Workbench:
         self.followup=None
         self.start_path(self.planner.plan(p,goal));self.say(f'Walking to X {goal[0]:.2f}, Y {goal[1]:.2f} metres.')
 
+    def start_acquisition(self):
+        generation=self.scene_generation
+        def worker():
+            try:
+                reference=json.loads((self.acquired_layout or ROOT/'configs/calibration/paper_table.json').read_text())
+                result=self.acquirer.acquire(self.realsense.path,reference,
+                    lambda message:setattr(self.realsense.acquire_status,'content',message))
+                self.commands.put(('acquired_scene',(generation,result)))
+            except Exception as error:
+                traceback.print_exc()
+                self.commands.put(('acquisition_error','Scene unchanged. '+str(error)))
+        threading.Thread(target=worker,name='acquire-scene',daemon=True).start()
+
+    def apply_acquisition(self,value):
+        generation,(path,layout,prepared)=value
+        if generation!=self.scene_generation:
+            self.realsense.finish_acquisition('Scene changed during analysis. Acquire again in the scene you want to update.')
+            return
+        self.load('camera_table',prepared_scene=prepared)
+        self.acquired_layout=path
+        saved=ROOT/'build/last_acquired_scene.json'
+        temporary=saved.with_suffix('.tmp')
+        temporary.write_text(json.dumps({'layout':str(path)}))
+        temporary.replace(saved)
+        self.environment.value=next(k for k,v in self.environments.items() if v=='camera_table')
+        self.camera('table')
+        count=len(layout['objects'])
+        message=f'Acquired {count} object'+('' if count==1 else 's')+'. Table updated.'
+        if not count:message+=' No supported tabletop objects were detected.'
+        if layout.get('omitted'):message+=' Omitted: '+', '.join(layout['omitted'])+'.'
+        self.realsense.finish_acquisition(message)
+        self.say(message)
+
     def run(self):
         frame=0
         while True:
@@ -313,11 +365,17 @@ class Workbench:
             while not self.commands.empty():
                 kind,value=self.commands.get()
                 try:
-                    if kind=='environment': self.load(value)
+                    if kind=='acquire': self.start_acquisition()
+                    elif kind=='acquired_scene': self.apply_acquisition(value)
+                    elif kind=='acquisition_error': self.realsense.finish_acquisition(value)
+                    elif kind=='environment': self.load(value)
                     elif kind=='camera': self.camera(value)
                     else: self.execute(value)
-                except ValueError as error: self.say(str(error))
+                except ValueError as error:
+                    if kind in ('acquire','acquired_scene'):self.realsense.finish_acquisition('Acquisition failed. '+str(error))
+                    self.say(str(error))
                 except Exception:
+                    if kind in ('acquire','acquired_scene'):self.realsense.finish_acquisition('Acquisition could not finish. Please retry.')
                     traceback.print_exc();self.say('The command could not finish. Reset the scene and try again.')
             self.walker.speed=round(self.speed.value,2)
             was_walking=bool(self.walker.path)

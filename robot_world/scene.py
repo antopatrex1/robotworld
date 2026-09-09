@@ -79,9 +79,11 @@ def add_furniture(world, name, pos, size, rgba):
                   rgba=rgba, friction="0.8 0.01 0.001")
 
 
-def build_scene(environment="lab", assisted=True):
+def build_scene(environment="lab", assisted=True, camera_layout=None, output_path=None):
     config_path = ROOT / "configs/environments" / f"{environment}.json"
     config = json.loads(config_path.read_text())
+    if camera_layout is not None:
+        config["camera_layout"] = str(camera_layout)
     robot = ET.parse(MENAGERIE / "unitree_g1/g1.xml").getroot()
     robot.set("model", "G1 with bilateral five-finger Shadow hands")
     absolute_assets(robot, MENAGERIE / "unitree_g1")
@@ -135,7 +137,7 @@ def build_scene(environment="lab", assisted=True):
         apply_camera_layout(world, asset, ROOT, config)
     ET.SubElement(world, "body", name="support_target", mocap="true", pos="0 0 0.79")
     ET.SubElement(section(robot, "equality"), "weld", name="base_support", body1="support_target", body2="pelvis", relpose="0 0 0 1 0 0 0", solref="0.01 1", active=str(assisted).lower())
-    output = ROOT / "build" / f"{environment}.xml"
+    output = Path(output_path) if output_path is not None else ROOT / "build" / f"{environment}.xml"
     output.parent.mkdir(exist_ok=True)
     ET.indent(robot)
     ET.ElementTree(robot).write(output, encoding="unicode")

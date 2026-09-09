@@ -42,6 +42,9 @@ def table_to_world(calibration, points):
 
 def apply_camera_layout(world, asset, root, config):
     calibration = json.loads((root / config['camera_layout']).read_text())
+    if 'objects' in calibration:
+        apply_detected_layout(world, asset, calibration, config)
+        return
     matrix = homography(calibration['paper_pixels'], calibration['paper_size_m'])
 
     def mapped(pixels):
@@ -91,3 +94,51 @@ def apply_camera_layout(world, asset, root, config):
     config['alignment_summary'] = {
         'method': calibration['method'], 'mug_table_xy_m': project(matrix, [calibration['mug_base_pixel']])[0].tolist(),
         'source_capture': calibration['source_capture'], 'limitations': calibration['limitations']}
+
+
+def apply_detected_layout(world, asset, calibration, config):
+    """Replace demo bodies with instances actually found in the new capture."""
+    import copy
+    from .objects import OBJECTS
+    templates = {}
+    for name in OBJECTS:
+        body = world.find(f"body[@name='{name}']")
+        if body is not None:
+            templates[name] = copy.deepcopy(body)
+            world.remove(body)
+    matrix = homography(calibration['paper_pixels'], calibration['paper_size_m'])
+    config['object_labels'] = {}
+    config['graspable_objects'] = []
+    for item in calibration['objects']:
+        name, kind = item['id'], item['kind']
+        xy = project(matrix,[item['base_pixel']])
+        position = table_to_world(calibration,xy)[0]
+        rgba = ' '.join(map(str,np.r_[np.asarray(item['color_rgb']) / 255.,1]))
+        if kind in templates:
+            body = copy.deepcopy(templates[kind])
+            # Preserve the proven model dimensions while relocating its base.
+            position[2] += float(body.get('pos').split()[2]) - .725
+            for element in body.iter():
+                if element.get('name'):
+                    element.set('name',name+element.get('name')[len(kind):])
+            for geom in body.findall('geom'):
+                geom.set('rgba',rgba)
+        else:
+            body = ET.Element('body',name=name)
+            ET.SubElement(body,'freejoint',name=name+'_free')
+            position[2] += .018
+            ET.SubElement(body,'geom',name=name+'_body',type='ellipsoid',size='.055 .033 .018',
+                          rgba=rgba,mass='.08',friction='1 .01 .001')
+        body.set('pos',' '.join(map(str,position)))
+        world.append(body)
+        config['object_labels'][name] = item['label']
+        if kind in ('mug','bottle','apple'):
+            config['graspable_objects'].append(name)
+    width,length = calibration['paper_size_m']
+    center = table_to_world(calibration,[[width/2,length/2]])[0]+[0,0,.0004]
+    ET.SubElement(world,'geom',name='calibration_paper',type='box',
+                  pos=' '.join(map(str,center)),size=f'{length/2} {width/2} .0004',
+                  rgba='.95 .94 .88 1',contype='0',conaffinity='0')
+    config['alignment_summary'] = {'method':calibration['method'],
+        'source_capture':calibration['source_capture'], 'limitations':calibration['limitations'],
+        'object_count':len(calibration['objects']), 'omitted':calibration.get('omitted',[])}
