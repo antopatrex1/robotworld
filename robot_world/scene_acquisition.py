@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .table_alignment import homography, project
+from .table_alignment import homography, project, correct_table_orientation
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = ROOT / 'data/models/yolo11s-seg.pt'
@@ -159,6 +159,7 @@ def color_name(rgb):
 def analyze_scene(metadata, reference, model=None):
     """Infer new objects, map only their table contact points, omit cropped items."""
     import cv2
+    reference = correct_table_orientation(reference)
     rgb = np.asarray(Image.open(metadata['color']).convert('RGB'))
     corners = find_paper(rgb, reference)
     matrix = homography(corners, reference['paper_size_m'])

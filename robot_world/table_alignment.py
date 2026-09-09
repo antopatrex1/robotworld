@@ -33,7 +33,22 @@ def project(matrix, points):
     return homogeneous[:, :2] / homogeneous[:, 2, None]
 
 
+def correct_table_orientation(calibration):
+    """Migrate the original X-reflected paper frame, including saved acquisitions.
+
+    Image u goes right (+Y); image v goes toward the viewer (+X). Their
+    cross product points down, as it must for an image of the table from above.
+    The physical tabletop spans X=.23.. .91 and Y=-.50.. .30.
+    """
+    if (np.allclose(calibration['world_corner'], [.91,-.5,.725]) and
+            np.allclose(calibration['world_u'], [0,1,0]) and
+            np.allclose(calibration['world_v'], [-1,0,0])):
+        calibration = dict(calibration, world_corner=[.23,-.5,.725], world_v=[1,0,0])
+    return calibration
+
+
 def table_to_world(calibration, points):
+    calibration = correct_table_orientation(calibration)
     points = np.asarray(points, dtype=float)
     return (np.asarray(calibration['world_corner']) +
             points[:, :1] * np.asarray(calibration['world_u']) +
@@ -41,7 +56,7 @@ def table_to_world(calibration, points):
 
 
 def apply_camera_layout(world, asset, root, config):
-    calibration = json.loads((root / config['camera_layout']).read_text())
+    calibration = correct_table_orientation(json.loads((root / config['camera_layout']).read_text()))
     if 'objects' in calibration:
         apply_detected_layout(world, asset, calibration, config)
         return
@@ -98,6 +113,7 @@ def apply_camera_layout(world, asset, root, config):
 
 def apply_detected_layout(world, asset, calibration, config):
     """Replace demo bodies with instances actually found in the new capture."""
+    calibration = correct_table_orientation(calibration)
     import copy
     from .objects import OBJECTS
     templates = {}

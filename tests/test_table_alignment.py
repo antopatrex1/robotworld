@@ -6,7 +6,7 @@ import numpy as np
 
 from robot_world.scene import ROOT, build_scene
 from robot_world.control import Controller
-from robot_world.table_alignment import homography, project, table_to_world
+from robot_world.table_alignment import homography, project, table_to_world, correct_table_orientation
 
 
 class TableAlignmentTests(unittest.TestCase):
@@ -28,10 +28,26 @@ class TableAlignmentTests(unittest.TestCase):
         calibration = json.loads((ROOT/'configs/calibration/paper_table.json').read_text())
         corners = project(homography(calibration['paper_pixels'], calibration['paper_size_m']), calibration['paper_pixels'])
         world = table_to_world(calibration, corners)
-        np.testing.assert_allclose(world[0], [.91,-.5,.725])
+        np.testing.assert_allclose(world[0], [.23,-.5,.725])
         self.assertAlmostEqual(np.linalg.norm(world[1]-world[0]), .210)
         self.assertAlmostEqual(np.linalg.norm(world[3]-world[0]), .147)
         np.testing.assert_allclose(world[:,2], .725)
+
+    def test_image_right_and_near_directions_are_not_reflected(self):
+        calibration=json.loads((ROOT/'configs/calibration/paper_table.json').read_text())
+        origin,right,near=table_to_world(calibration,[[0,0],[.210,0],[0,.147]])
+        self.assertGreater(right[1],origin[1])
+        self.assertGreater(near[0],origin[0])
+        self.assertLess(np.cross(right-origin,near-origin)[2],0)
+        # The far edge and near edge still cover exactly the same tabletop.
+        np.testing.assert_allclose(table_to_world(calibration,[[0,0],[.8,.68]]),
+                                   [[.23,-.5,.725],[.91,.3,.725]])
+        legacy=dict(calibration,world_corner=[.91,-.5,.725],world_v=[-1,0,0])
+        np.testing.assert_allclose(table_to_world(legacy,[[.3,.1],[.1,.4]]),
+                                   table_to_world(calibration,[[.3,.1],[.1,.4]]))
+        migrated=correct_table_orientation(legacy)
+        self.assertEqual(migrated,correct_table_orientation(migrated))
+        self.assertEqual(legacy['world_corner'],[.91,-.5,.725])
 
     def test_camera_scene_has_no_hidden_demo_props_and_mug_rests(self):
         model, data, _, _ = build_scene('camera_table')

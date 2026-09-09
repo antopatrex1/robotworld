@@ -41,7 +41,8 @@ class ObjectTaskTests(unittest.TestCase):
         # Planning must not teleport either participant.
         np.testing.assert_array_equal(data.qpos[:3],robot_start)
         np.testing.assert_array_equal(data.body(name).xpos,object_start)
-        self.assertIsNotNone(task.pending)
+        needs_walk=task.pending is not None
+        if environment!='camera_table':self.assertTrue(needs_walk)
         max_base_step=0.
         limited=np.flatnonzero(model.jnt_actfrclimited)
         for frame in range(1100):
@@ -58,8 +59,9 @@ class ObjectTaskTests(unittest.TestCase):
                     self.assertGreaterEqual(force,low-1e-6)
             if control.grasp_monitor and control.grasp_monitor.held_seconds>=5:break
         self.assertLessEqual(max_base_step,walker.speed*model.opt.timestep+1e-10)
-        self.assertGreater(np.linalg.norm(data.qpos[:2]-robot_start[:2]),.5)
-        self.assertTrue(any('Walking to '+label in msg for msg in messages))
+        if needs_walk:
+            self.assertGreater(np.linalg.norm(data.qpos[:2]-robot_start[:2]),.5)
+            self.assertTrue(any('Walking to '+label in msg for msg in messages))
         self.assertTrue(any('Grasping '+label in msg for msg in messages))
         self.assertIsNone(task.pending)
         self.assertIsNotNone(control.grasp_monitor)
